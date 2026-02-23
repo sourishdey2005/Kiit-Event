@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Calendar, Shield, Users, ArrowRight } from 'lucide-react';
+import { Calendar, Shield, Users, ArrowRight, Loader2 } from 'lucide-react';
 
 function LandingContent() {
   const [email, setEmail] = useState('');
@@ -27,10 +27,21 @@ function LandingContent() {
         toast({ title: "Welcome back!", description: "Logged in successfully." });
       } else {
         if (!name) {
-          throw new Error("Please enter your name for registration.");
+          toast({ variant: "destructive", title: "Missing Name", description: "Please enter your name for registration." });
+          setLoading(false);
+          return;
         }
-        await signUp(email, password, name);
-        toast({ title: "Account created!", description: "Please check your email for confirmation." });
+        const result = await signUp(email, password, name);
+        if (result.needsVerification) {
+          toast({ 
+            title: "Registration successful!", 
+            description: "Please check your email to verify your account before logging in.",
+          });
+          // Switch to login view after successful signup request
+          setIsLogin(true);
+        } else {
+          toast({ title: "Account created!", description: "Welcome to KIIT EventSphere." });
+        }
       }
     } catch (error: any) {
       toast({ 
@@ -100,6 +111,7 @@ function LandingContent() {
                       placeholder="e.g. Sourish Kumar" 
                       value={name}
                       onChange={(e) => setName(e.target.value)}
+                      disabled={loading}
                       required
                     />
                   </div>
@@ -112,6 +124,7 @@ function LandingContent() {
                     placeholder="name@kiit.ac.in" 
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
+                    disabled={loading}
                     required
                   />
                 </div>
@@ -122,18 +135,29 @@ function LandingContent() {
                     type="password" 
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
+                    disabled={loading}
                     required
                   />
                 </div>
                 <Button className="w-full h-11 text-lg font-medium" type="submit" disabled={loading}>
-                  {loading ? 'Processing...' : (isLogin ? 'Sign In' : 'Register')}
-                  {!loading && <ArrowRight className="ml-2 w-4 h-4" />}
+                  {loading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Please wait
+                    </>
+                  ) : (
+                    <>
+                      {isLogin ? 'Sign In' : 'Register'}
+                      <ArrowRight className="ml-2 w-4 h-4" />
+                    </>
+                  )}
                 </Button>
                 <div className="text-center pt-2">
                   <button 
                     type="button" 
                     onClick={() => setIsLogin(!isLogin)}
-                    className="text-sm text-primary hover:underline font-medium"
+                    disabled={loading}
+                    className="text-sm text-primary hover:underline font-medium disabled:opacity-50"
                   >
                     {isLogin ? "Don't have an account? Sign Up" : "Already have an account? Sign In"}
                   </button>

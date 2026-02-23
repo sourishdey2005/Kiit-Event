@@ -8,7 +8,7 @@ interface AuthContextType {
   user: AppUser | null;
   loading: boolean;
   signIn: (email: string, pass: string) => Promise<void>;
-  signUp: (email: string, pass: string, name: string) => Promise<void>;
+  signUp: (email: string, pass: string, name: string) => Promise<{ needsVerification: boolean }>;
   signOut: () => Promise<void>;
 }
 
@@ -38,11 +38,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           } else if (profile) {
             setUser(profile);
           }
-        } else {
-          const storedUser = localStorage.getItem('kiit_event_session');
-          if (storedUser) {
-            setUser(JSON.parse(storedUser));
-          }
         }
       } catch (err) {
         console.error('Session fetch failed:', err);
@@ -60,15 +55,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .select('*')
           .eq('id', session.user.id)
           .single();
-        if (profile) setUser(profile);
+        if (profile) {
+          setUser(profile);
+          // Redirect to appropriate dashboard if on the landing page
+          if (window.location.pathname === '/') {
+            if (profile.role === 'student') router.push('/dashboard/student');
+            else if (profile.role === 'society_admin') router.push('/dashboard/society-admin');
+            else if (profile.role === 'super_admin') router.push('/dashboard/super-admin');
+          }
+        }
       } else {
         setUser(null);
-        localStorage.removeItem('kiit_event_session');
       }
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [router]);
 
   const signUp = async (email: string, pass: string, name: string) => {
     try {
@@ -76,23 +78,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         email,
         password: pass,
         options: {
-          data: { name }
+          data: { name },
+          emailRedirectTo: `${window.location.origin}/dashboard/student`
         }
       });
       
       if (error) throw error;
       
       if (data.user && !data.session) {
-        // Email confirmation is likely enabled
-        throw new Error("Registration successful! Please check your email to verify your account before logging in.");
+        // Email confirmation is enabled in Supabase settings
+        return { needsVerification: true };
       }
 
       if (data.user && data.session) {
-        router.push('/dashboard/student');
+        // Auto-login (email confirmation disabled)
+        const { data: profile } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', data.user.id)
+          .single();
+        
+        if (profile) {
+          setUser(profile);
+          router.push('/dashboard/student');
+        }
+        return { needsVerification: false };
       }
+      
+      return { needsVerification: false };
     } catch (err: any) {
       if (err.message === 'Failed to fetch') {
-        throw new Error("Network error: Could not reach Supabase. Please check your internet connection or project status.");
+        throw new Error("Network error: Could not reach Supabase. Please check your internet connection.");
       }
       throw err;
     }
@@ -108,7 +124,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         role: 'super_admin'
       };
       setUser(adminUser);
-      localStorage.setItem('kiit_event_session', JSON.stringify(adminUser));
       router.push('/dashboard/super-admin');
       return;
     }
@@ -135,7 +150,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (err: any) {
       if (err.message === 'Failed to fetch') {
-        throw new Error("Network error: Could not reach Supabase. Please check your internet connection or project status.");
+        throw new Error("Network error: Could not reach Supabase.");
       }
       throw err;
     }
@@ -143,7 +158,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     await supabase.auth.signOut();
-    localStorage.removeItem('kiit_event_session');
     setUser(null);
     router.push('/');
   };
