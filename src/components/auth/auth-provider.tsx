@@ -22,6 +22,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const fetchSession = async () => {
       try {
+        // Check for mock admin session first
+        const mockAdmin = sessionStorage.getItem('mock_admin_user');
+        if (mockAdmin) {
+          setUser(JSON.parse(mockAdmin));
+          setLoading(false);
+          return;
+        }
+
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         
         if (sessionError) throw sessionError;
@@ -58,13 +66,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (profile) {
           setUser(profile);
         }
-      } else {
+      } else if (!sessionStorage.getItem('mock_admin_user')) {
         setUser(null);
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [router]);
+  }, []);
 
   const signUp = async (email: string, pass: string, name: string) => {
     try {
@@ -79,16 +87,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       if (error) throw error;
       
-      // If we have user but no session, it means email confirmation is required
       if (data.user && !data.session) {
         return { needsVerification: true };
       }
 
       return { needsVerification: false };
     } catch (err: any) {
-      if (err.message === 'Failed to fetch') {
-        throw new Error("Network error: Could not connect to Supabase. Check your internet.");
-      }
       throw err;
     }
   };
@@ -102,6 +106,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         email: 'admin@kiit',
         role: 'super_admin'
       };
+      sessionStorage.setItem('mock_admin_user', JSON.stringify(adminUser));
       setUser(adminUser);
       router.push('/dashboard/super-admin');
       return;
@@ -128,14 +133,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       }
     } catch (err: any) {
-      if (err.message === 'Failed to fetch') {
-        throw new Error("Network error: Could not reach Supabase API.");
-      }
       throw err;
     }
   };
 
   const signOut = async () => {
+    sessionStorage.removeItem('mock_admin_user');
     await supabase.auth.signOut();
     setUser(null);
     router.push('/');
