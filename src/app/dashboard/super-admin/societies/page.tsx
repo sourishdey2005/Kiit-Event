@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { PlusCircle, Users, Mail, User, Loader2, Search, Trash2, AlertCircle } from 'lucide-react';
+import { PlusCircle, Users, Mail, User, Loader2, Search, Trash2, AlertCircle, Database } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -37,13 +37,15 @@ export default function SocietyManagement() {
         .order('created_at', { ascending: false });
       
       if (supabaseError) {
-        console.error('Supabase Error:', supabaseError);
-        throw new Error(supabaseError.message || 'Failed to fetch societies');
+        if (supabaseError.code === '42501') {
+          throw new Error('Permission denied. Please run the "Bypass-Friendly" SQL script in Supabase.');
+        }
+        throw new Error(supabaseError.message);
       }
       setSocieties(data || []);
     } catch (err: any) {
       console.error('Fetch Societies Error:', err);
-      setError(err.message || 'An unexpected error occurred while fetching societies.');
+      setError(err.message || 'Failed to sync with database.');
     } finally {
       setFetching(false);
     }
@@ -58,21 +60,20 @@ export default function SocietyManagement() {
     setLoading(true);
     
     try {
-      const { data, error: supabaseError } = await supabase
+      const { error: supabaseError } = await supabase
         .from('societies')
         .insert([{
           name: formData.name,
           description: formData.description,
           fic_name: formData.ficName,
           contact_email: formData.contactEmail
-        }])
-        .select();
+        }]);
 
       if (supabaseError) throw new Error(supabaseError.message);
 
       toast({
         title: "Society Added!",
-        description: `${formData.name} has been successfully registered. The Society Admin can now register with the email ${formData.contactEmail}.`
+        description: `${formData.name} is now live in the system.`
       });
       
       setFormData({ name: '', description: '', ficName: '', contactEmail: '' });
@@ -80,7 +81,7 @@ export default function SocietyManagement() {
     } catch (err: any) {
       toast({
         variant: "destructive",
-        title: "Error",
+        title: "Sync Failed",
         description: err.message
       });
     } finally {
@@ -89,15 +90,13 @@ export default function SocietyManagement() {
   };
 
   const deleteSociety = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this society? This will NOT delete any associated events but might cause orphans.')) return;
-    
     try {
       const { error: supabaseError } = await supabase.from('societies').delete().eq('id', id);
       if (supabaseError) throw new Error(supabaseError.message);
-      toast({ title: "Deleted", description: "Society record removed successfully." });
+      toast({ title: "Deleted", description: "Society removed." });
       fetchSocieties();
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Error", description: err.message });
+      toast({ variant: "destructive", title: "Action Failed", description: err.message });
     }
   };
 
@@ -106,16 +105,20 @@ export default function SocietyManagement() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-primary">Society Management</h1>
-          <p className="text-muted-foreground">Add campus societies and assign their Faculty-in-Charge (FIC).</p>
+          <p className="text-muted-foreground">Manage campus organizations and their Faculty-in-Charge.</p>
         </div>
+        <Button variant="outline" size="sm" onClick={fetchSocieties} disabled={fetching}>
+          <Database className={`w-4 h-4 mr-2 ${fetching ? 'animate-spin' : ''}`} />
+          Sync Live
+        </Button>
       </div>
 
       {error && (
-        <Alert variant="destructive">
+        <Alert variant="destructive" className="bg-destructive/5 border-destructive/20 text-destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Database Sync Issue</AlertTitle>
-          <AlertDescription>
-            {error}. Ensure you have executed the Master SQL script in your Supabase dashboard.
+          <AlertDescription className="text-xs mt-1">
+            {error}
           </AlertDescription>
         </Alert>
       )}
@@ -123,60 +126,44 @@ export default function SocietyManagement() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <Card className="lg:col-span-1 border-none shadow-md h-fit">
           <CardHeader>
-            <CardTitle className="flex items-center">
-              <PlusCircle className="mr-2 w-5 h-5 text-accent" />
-              Register New Society
-            </CardTitle>
-            <CardDescription>Enter the official details for the new society.</CardDescription>
+            <CardTitle className="text-lg">Register Society</CardTitle>
+            <CardDescription>Setup a new society profile.</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="name">Society Name</Label>
+                <Label>Society Name</Label>
                 <Input 
-                  id="name" 
-                  placeholder="e.g. KIIT Robotics Society" 
+                  placeholder="e.g. KIIT Music Society" 
                   value={formData.name}
                   onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
                   required
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="ficName">Faculty-in-Charge (FIC)</Label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input 
-                    id="ficName" 
-                    placeholder="Prof. Name" 
-                    className="pl-10"
-                    value={formData.ficName}
-                    onChange={(e) => setFormData(prev => ({ ...prev, ficName: e.target.value }))}
-                    required
-                  />
-                </div>
+                <Label>Faculty-in-Charge</Label>
+                <Input 
+                  placeholder="Prof. Name" 
+                  value={formData.ficName}
+                  onChange={(e) => setFormData(prev => ({ ...prev, ficName: e.target.value }))}
+                  required
+                />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="contactEmail">Official Contact Email</Label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input 
-                    id="contactEmail" 
-                    type="email"
-                    placeholder="society@kiit.ac.in" 
-                    className="pl-10"
-                    value={formData.contactEmail}
-                    onChange={(e) => setFormData(prev => ({ ...prev, contactEmail: e.target.value }))}
-                    required
-                  />
-                </div>
-                <p className="text-[10px] text-muted-foreground italic">Society admins will use this email to log in.</p>
+                <Label>Official Email</Label>
+                <Input 
+                  type="email"
+                  placeholder="society@kiit.ac.in" 
+                  value={formData.contactEmail}
+                  onChange={(e) => setFormData(prev => ({ ...prev, contactEmail: e.target.value }))}
+                  required
+                />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="description">Society Description</Label>
+                <Label>Description</Label>
                 <Textarea 
-                  id="description" 
-                  placeholder="A brief about the society's goals..." 
-                  className="min-h-[100px]"
+                  placeholder="Goals and vision..." 
+                  className="min-h-[80px]"
                   value={formData.description}
                   onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
                 />
@@ -189,51 +176,40 @@ export default function SocietyManagement() {
           </CardContent>
         </Card>
 
-        <Card className="lg:col-span-2 border-none shadow-md overflow-hidden">
+        <Card className="lg:col-span-2 border-none shadow-md overflow-hidden bg-white">
           <CardHeader className="bg-slate-50/50">
-            <CardTitle>Society Directory</CardTitle>
-            <CardDescription>All registered societies on KIIT EventSphere.</CardDescription>
+            <CardTitle className="text-lg">Society Directory</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             <Table>
-              <TableHeader className="bg-slate-50/30">
+              <TableHeader className="bg-slate-50/10">
                 <TableRow>
-                  <TableHead>Society Details</TableHead>
+                  <TableHead>Details</TableHead>
                   <TableHead>FIC</TableHead>
-                  <TableHead>Contact Email</TableHead>
+                  <TableHead>Contact</TableHead>
                   <TableHead className="text-right">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {fetching ? (
-                  <TableRow>
-                    <TableCell colSpan={4} className="text-center py-10">
-                      <Loader2 className="w-6 h-6 animate-spin mx-auto text-primary" />
-                    </TableCell>
-                  </TableRow>
+                  <TableRow><TableCell colSpan={4} className="text-center py-10"><Loader2 className="w-6 h-6 animate-spin mx-auto text-primary" /></TableCell></TableRow>
                 ) : societies.map((soc) => (
-                  <TableRow key={soc.id} className="hover:bg-slate-50">
+                  <TableRow key={soc.id}>
                     <TableCell>
-                      <div className="flex flex-col">
-                        <span className="font-semibold">{soc.name}</span>
-                        <span className="text-[10px] text-muted-foreground line-clamp-1">{soc.description}</span>
-                      </div>
+                      <div className="font-semibold">{soc.name}</div>
+                      <div className="text-[10px] text-muted-foreground line-clamp-1">{soc.description}</div>
                     </TableCell>
-                    <TableCell className="text-sm">{soc.fic_name || 'Not Set'}</TableCell>
-                    <TableCell className="text-sm font-medium text-primary underline">{soc.contact_email}</TableCell>
+                    <TableCell className="text-sm">{soc.fic_name}</TableCell>
+                    <TableCell className="text-sm text-primary">{soc.contact_email}</TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="icon" className="text-red-500 hover:bg-red-50" onClick={() => deleteSociety(soc.id)}>
+                      <Button variant="ghost" size="icon" className="text-red-500" onClick={() => deleteSociety(soc.id)}>
                         <Trash2 className="w-4 h-4" />
                       </Button>
                     </TableCell>
                   </TableRow>
                 ))}
-                {!fetching && societies.length === 0 && !error && (
-                  <TableRow>
-                    <TableCell colSpan={4} className="text-center py-10 text-muted-foreground">
-                      No societies registered. Add your first society!
-                    </TableCell>
-                  </TableRow>
+                {!fetching && societies.length === 0 && (
+                  <TableRow><TableCell colSpan={4} className="text-center py-10 text-muted-foreground italic">No societies found.</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>
