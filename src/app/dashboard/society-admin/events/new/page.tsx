@@ -11,8 +11,11 @@ import { Calendar as CalendarIcon, MapPin, Users, Sparkles, Loader2, Image as Im
 import { generateEventDescription } from '@/ai/flows/generate-event-description';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/components/auth/auth-provider';
+import { supabase } from '@/lib/supabase';
 
 export default function CreateEvent() {
+  const { user } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -64,18 +67,43 @@ export default function CreateEvent() {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!user?.society_id) return;
+    
     setLoading(true);
-    // Simulate API call
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      const eventDateTime = `${formData.date}T${formData.time}:00Z`;
+      
+      const { error } = await supabase
+        .from('events')
+        .insert([{
+          title: formData.title,
+          description: formData.description,
+          venue: formData.venue,
+          event_date: eventDateTime,
+          max_limit: parseInt(formData.limit),
+          society_id: user.society_id,
+          created_by: user.id,
+          verified: false // Awaiting Super Admin
+        }]);
+
+      if (error) throw error;
+
       toast({
-        title: "Event Created!",
-        description: "Your event has been submitted for Super Admin verification."
+        title: "Event Submitted!",
+        description: "Your event has been sent to Super Admin for verification."
       });
       router.push('/dashboard/society-admin');
-    }, 1500);
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Launch Failed",
+        description: err.message
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -180,7 +208,7 @@ export default function CreateEvent() {
                 <Label htmlFor="keywords">Keywords / Short Outline</Label>
                 <Textarea 
                   id="keywords" 
-                  placeholder="e.g. Coding contest, 24 hours, cash prizes, free snacks, professional mentors, open for all branches"
+                  placeholder="e.g. Coding contest, 24 hours, cash prizes, free snacks"
                   className="min-h-[100px]"
                   value={formData.keywords}
                   onChange={(e) => setFormData(prev => ({ ...prev, keywords: e.target.value }))}
@@ -247,7 +275,7 @@ export default function CreateEvent() {
                   Your event will be submitted for verification. Super Admins usually approve within 24 hours.
                 </p>
               </div>
-              <Button className="w-full bg-white text-primary hover:bg-slate-100 font-bold h-12" disabled={loading}>
+              <Button type="submit" className="w-full bg-white text-primary hover:bg-slate-100 font-bold h-12" disabled={loading}>
                 {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Launch Event Request"}
               </Button>
             </CardContent>

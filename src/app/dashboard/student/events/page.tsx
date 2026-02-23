@@ -5,8 +5,8 @@ import React, { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { EventCard } from '@/components/dashboard/event-card';
-import { Search, Filter, Calendar as CalendarIcon, Sparkles } from 'lucide-react';
-import { CampusEvent } from '@/lib/supabase';
+import { Search, Filter, Calendar as CalendarIcon, Sparkles, Loader2 } from 'lucide-react';
+import { supabase, CampusEvent } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/components/auth/auth-provider';
 
@@ -17,59 +17,52 @@ export default function EventsDiscovery() {
   const [events, setEvents] = useState<Partial<CampusEvent>[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Mock data for initial view
+  const fetchEvents = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('events')
+        .select('*')
+        .eq('verified', true)
+        .order('event_date', { ascending: true });
+      
+      if (error) throw error;
+      setEvents(data || []);
+    } catch (err: any) {
+      console.error(err);
+      toast({ variant: "destructive", title: "Sync Error", description: "Failed to load events." });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const mockEvents: Partial<CampusEvent>[] = [
-      {
-        id: '1',
-        title: 'Annual Tech Hackathon',
-        description: 'Join the biggest coding event of the year. Build innovative solutions for real-world problems.',
-        venue: 'Campus 6 Auditorium',
-        event_date: '2024-11-20T10:00:00Z',
-        max_limit: 500,
-        verified: true,
-        poster: 'https://picsum.photos/seed/hack1/800/600'
-      },
-      {
-        id: '2',
-        title: 'Musical Night 2024',
-        description: 'A night filled with music, rhythm and soul. Performances by top university bands.',
-        venue: 'Student Activity Center',
-        event_date: '2024-12-05T18:00:00Z',
-        max_limit: 1200,
-        verified: true,
-        poster: 'https://picsum.photos/seed/music2/800/600'
-      },
-      {
-        id: '3',
-        title: 'Robotics Workshop',
-        description: 'Learn the basics of Arduino and robotics in this hands-on 3-day workshop.',
-        venue: 'Lab 3, Campus 3',
-        event_date: '2024-11-15T14:00:00Z',
-        max_limit: 50,
-        verified: true,
-        poster: 'https://picsum.photos/seed/robot3/800/600'
-      },
-      {
-        id: '4',
-        title: 'Startup Pitch Deck',
-        description: 'Learn how to pitch your ideas to VCs and get your startup funded.',
-        venue: 'Conference Hall',
-        event_date: '2024-12-10T11:00:00Z',
-        max_limit: 100,
-        verified: true,
-        poster: 'https://picsum.photos/seed/startup4/800/600'
-      }
-    ];
-    setEvents(mockEvents);
-    setLoading(false);
+    fetchEvents();
   }, []);
 
-  const handleRegister = (eventTitle: string) => {
-    toast({
-      title: "Registration Success!",
-      description: `You have successfully registered for ${eventTitle}. Check 'My Tickets' for your entry pass.`,
-    });
+  const handleRegister = async (eventId: string, eventTitle: string) => {
+    if (!user) return;
+    try {
+      const { error } = await supabase
+        .from('registrations')
+        .insert([{ user_id: user.id, event_id: eventId }]);
+      
+      if (error) {
+        if (error.code === '23505') {
+          toast({ title: "Already Registered", description: "You have already secured a spot for this event." });
+        } else {
+          throw error;
+        }
+        return;
+      }
+
+      toast({
+        title: "Registration Success!",
+        description: `You have successfully registered for ${eventTitle}. Check 'My Tickets' for your entry pass.`,
+      });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Failed to Register", description: err.message });
+    }
   };
 
   const filteredEvents = events.filter(event => 
@@ -119,7 +112,7 @@ export default function EventsDiscovery() {
               <EventCard 
                 key={event.id} 
                 event={event} 
-                onRegister={() => handleRegister(event.title || '')} 
+                onRegister={() => handleRegister(event.id!, event.title || '')} 
               />
             ))
           ) : (
@@ -134,7 +127,6 @@ export default function EventsDiscovery() {
         </div>
       )}
       
-      {/* Featured AI Recommendation Promo */}
       <div className="bg-primary text-white p-8 rounded-3xl relative overflow-hidden">
         <div className="absolute top-0 right-0 p-12 opacity-10">
           <Sparkles className="w-48 h-48" />
@@ -142,11 +134,13 @@ export default function EventsDiscovery() {
         <div className="relative z-10 max-w-2xl">
           <h2 className="text-2xl font-bold mb-3">Can't decide where to go?</h2>
           <p className="text-slate-200 mb-6 leading-relaxed">
-            Our AI-powered recommendation system analyzes your interests and past activities to suggest the most relevant events for you.
+            Use the student dashboard to see AI-powered recommendations tailored just for you.
           </p>
-          <Button variant="secondary" className="font-bold text-primary">
-            Get Personalized Suggestions
-          </Button>
+          <Link href="/dashboard/student">
+            <Button variant="secondary" className="font-bold text-primary">
+              Check Recommendations
+            </Button>
+          </Link>
         </div>
       </div>
     </div>
