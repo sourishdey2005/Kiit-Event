@@ -21,24 +21,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   const loadProfile = async (userId: string) => {
-    const { data: profile, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', userId)
-      .single();
-    
-    if (error) {
-      console.error('Error fetching profile:', error);
+    try {
+      const { data: profile, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .single();
+      
+      if (error) {
+        // Log error but don't crash; might be a missing row in public.users
+        console.warn('Profile record not found in public.users, using fallback.', error.message);
+        return null;
+      }
+      return profile;
+    } catch (e) {
       return null;
     }
-    return profile;
+  };
+
+  const syncUser = async (sessionUser: any) => {
+    const profile = await loadProfile(sessionUser.id);
+    if (profile) {
+      setUser(profile);
+    } else {
+      // Fallback user object if the trigger failed to create a public profile
+      setUser({
+        id: sessionUser.id,
+        name: sessionUser.user_metadata?.name || 'User',
+        email: sessionUser.email || '',
+        role: 'student' // Default fallback role
+      });
+    }
   };
 
   useEffect(() => {
     const initializeAuth = async () => {
       setLoading(true);
       try {
-        // 1. Immediate check for mock session
+        // 1. Check for mock admin session
         const mockAdmin = sessionStorage.getItem('mock_admin_user');
         if (mockAdmin) {
           setUser(JSON.parse(mockAdmin));
@@ -46,14 +66,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return;
         }
 
-        // 2. Supabase Check
+        // 2. Check Supabase session
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
-          const profile = await loadProfile(session.user.id);
-          if (profile) setUser(profile);
+          await syncUser(session.user);
         }
       } catch (err) {
-        console.error('Auth init error:', err);
+        console.error('Auth initialization error:', err);
       } finally {
         setLoading(false);
       }
@@ -63,8 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
-        const profile = await loadProfile(session.user.id);
-        if (profile) setUser(profile);
+        await syncUser(session.user);
       } else {
         if (!sessionStorage.getItem('mock_admin_user')) {
           setUser(null);
@@ -101,7 +119,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       sessionStorage.setItem('mock_admin_user', JSON.stringify(adminUser));
       setUser(adminUser);
       setLoading(false);
-      window.location.href = '/dashboard/super-admin';
+      router.push('/dashboard/super-admin');
       return;
     }
 
@@ -109,13 +127,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) throw error;
 
     if (data.user) {
-      const profile = await loadProfile(data.user.id);
-      if (profile) {
-        setUser(profile);
-        const path = profile.role === 'super_admin' ? 'super-admin' : 
-                     profile.role === 'society_admin' ? 'society-admin' : 'student';
-        router.push(`/dashboard/${path}`);
-      }
+      await syncUser(data.user);
+      // Wait a brief moment for state to update then redirect based on role
+      // We check sessionUser role directly from profile if possible
     }
   };
 

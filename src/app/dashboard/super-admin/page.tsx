@@ -1,3 +1,4 @@
+
 "use client"
 
 import React, { useState, useEffect } from 'react';
@@ -89,8 +90,8 @@ export default function SuperAdminDashboard() {
       console.error('Error fetching dashboard data:', error);
       toast({
         variant: "destructive",
-        title: "Database Error",
-        description: "Could not sync dashboard data. Check Supabase connection."
+        title: "Database Sync Issues",
+        description: "Ensure you have run the Master SQL code in your Supabase dashboard."
       });
     } finally {
       setFetching(false);
@@ -118,7 +119,7 @@ export default function SuperAdminDashboard() {
 
       toast({
         title: "Society Registered",
-        description: `Successfully added ${formData.name}. Society admin can now register.`
+        description: `Successfully added ${formData.name}. Society admin can now register with their email.`
       });
       setFormData({ name: '', ficName: '', contactEmail: '', description: '' });
       fetchData();
@@ -164,12 +165,12 @@ export default function SuperAdminDashboard() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-primary">Global Control Center</h1>
-          <p className="text-muted-foreground">Real-time monitoring of KIIT campus activities.</p>
+          <p className="text-muted-foreground">Real-time monitoring of campus activities.</p>
         </div>
         <div className="flex space-x-3">
           <Button variant="outline" onClick={fetchData} disabled={fetching}>
             <RefreshCw className={`w-4 h-4 mr-2 ${fetching ? 'animate-spin' : ''}`} />
-            Sync Data
+            Refresh Stats
           </Button>
         </div>
       </div>
@@ -200,9 +201,9 @@ export default function SuperAdminDashboard() {
           <CardHeader>
             <CardTitle className="text-xl flex items-center">
               <PlusCircle className="mr-2 w-5 h-5 text-accent" />
-              Add Society
+              Register Society
             </CardTitle>
-            <CardDescription>Register society and FIC contact details.</CardDescription>
+            <CardDescription>Setup a new society and its admin contact.</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleCreateSociety} className="space-y-4">
@@ -210,7 +211,7 @@ export default function SuperAdminDashboard() {
                 <Label htmlFor="name">Society Name</Label>
                 <Input 
                   id="name" 
-                  placeholder="e.g. KIIT Robotics Society"
+                  placeholder="e.g. Robotics Society"
                   value={formData.name}
                   onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
                   required 
@@ -244,7 +245,7 @@ export default function SuperAdminDashboard() {
                     required 
                   />
                 </div>
-                <p className="text-[10px] text-muted-foreground">Admin role is auto-assigned on signup with this email.</p>
+                <p className="text-[10px] text-muted-foreground">Admins register with this email to get access.</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="desc">Goals & Description</Label>
@@ -257,7 +258,7 @@ export default function SuperAdminDashboard() {
               </div>
               <Button className="w-full bg-primary" disabled={loading}>
                 {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <ShieldCheck className="w-4 h-4 mr-2" />}
-                Register to Database
+                Add to Database
               </Button>
             </form>
           </CardContent>
@@ -267,7 +268,7 @@ export default function SuperAdminDashboard() {
           <CardHeader className="bg-slate-50/50 border-b border-slate-100">
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="text-xl">Pending Verifications</CardTitle>
+                <CardTitle className="text-xl">Verification Requests</CardTitle>
                 <CardDescription>Event requests awaiting live approval.</CardDescription>
               </div>
               <Badge variant={pendingEvents.length > 0 ? "destructive" : "secondary"}>
@@ -330,7 +331,7 @@ export default function SuperAdminDashboard() {
                 ) : (
                   <TableRow>
                     <TableCell colSpan={4} className="text-center py-20 text-muted-foreground italic">
-                      All event requests have been processed.
+                      No pending requests. Everything is up to date!
                     </TableCell>
                   </TableRow>
                 )}
