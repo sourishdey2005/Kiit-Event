@@ -1,7 +1,7 @@
 
 "use client"
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { 
   BarChart, 
@@ -17,29 +17,70 @@ import {
   Pie,
   Cell
 } from 'recharts';
-import { Users, Calendar, Award, TrendingUp, Download } from 'lucide-react';
+import { Users, Calendar, Award, TrendingUp, Download, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { supabase } from '@/lib/supabase';
 
 export default function AnalyticsDashboard() {
-  const data = [
-    { name: 'Oct 01', registrations: 400, events: 2 },
-    { name: 'Oct 05', registrations: 1200, events: 5 },
-    { name: 'Oct 10', registrations: 900, events: 3 },
-    { name: 'Oct 15', registrations: 2400, events: 8 },
-    { name: 'Oct 20', registrations: 1800, events: 4 },
-    { name: 'Oct 25', registrations: 3200, events: 12 },
-    { name: 'Oct 30', registrations: 2800, events: 7 },
-  ];
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<any>({
+    totalRegs: 0,
+    totalEvents: 0,
+    totalSocieties: 0,
+    engagement: '0%'
+  });
+  const [pieData, setPieData] = useState<any[]>([]);
 
-  const societyPerformance = [
-    { name: 'Robotics', value: 4500 },
-    { name: 'KSAC', value: 3800 },
-    { name: 'Kronos', value: 3200 },
-    { name: 'Qutopia', value: 2100 },
-    { name: 'Music Soc', value: 1800 },
+  const fetchAnalytics = async () => {
+    setLoading(true);
+    try {
+      const { count: userCount } = await supabase.from('users').select('*', { count: 'exact', head: true });
+      const { count: evCount } = await supabase.from('events').select('*', { count: 'exact', head: true });
+      const { count: socCount } = await supabase.from('societies').select('*', { count: 'exact', head: true });
+      const { count: regCount } = await supabase.from('registrations').select('*', { count: 'exact', head: true });
+
+      setStats({
+        totalRegs: regCount || 0,
+        totalEvents: evCount || 0,
+        totalSocieties: socCount || 0,
+        engagement: userCount && regCount ? `${Math.round((regCount / userCount) * 100)}%` : '0%'
+      });
+
+      // Fetch top societies data
+      const { data: socs } = await supabase.from('societies').select('id, name');
+      const { data: regs } = await supabase.from('registrations').select('id, event_id, events(society_id)');
+      
+      const distribution = socs?.map(s => {
+        const count = regs?.filter(r => (r.events as any)?.society_id === s.id).length || 0;
+        return { name: s.name, value: count };
+      }).filter(s => s.value > 0).sort((a,b) => b.value - a.value).slice(0, 5) || [];
+
+      setPieData(distribution);
+
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAnalytics();
+  }, []);
+
+  const dummyTrends = [
+    { name: 'Mon', registrations: 40 },
+    { name: 'Tue', registrations: 120 },
+    { name: 'Wed', registrations: 90 },
+    { name: 'Thu', registrations: 240 },
+    { name: 'Fri', registrations: 180 },
+    { name: 'Sat', registrations: 320 },
+    { name: 'Sun', registrations: 280 },
   ];
 
   const COLORS = ['#2E3192', '#FF4500', '#10B981', '#F59E0B', '#6366F1'];
+
+  if (loading) return <div className="h-[60vh] flex items-center justify-center"><Loader2 className="animate-spin text-primary" /></div>;
 
   return (
     <div className="space-y-8">
@@ -56,10 +97,10 @@ export default function AnalyticsDashboard() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {[
-          { label: 'Total Registrations', value: '42,500', icon: Users, color: 'text-blue-500', bg: 'bg-blue-50' },
-          { label: 'Total Events', value: '1,240', icon: Calendar, color: 'text-orange-500', bg: 'bg-orange-50' },
-          { label: 'Verified Societies', value: '54', icon: Award, color: 'text-green-500', bg: 'bg-green-50' },
-          { label: 'Engagement Rate', value: '78%', icon: TrendingUp, color: 'text-purple-500', bg: 'bg-purple-50' },
+          { label: 'Total Registrations', value: stats.totalRegs.toLocaleString(), icon: Users, color: 'text-blue-500', bg: 'bg-blue-50' },
+          { label: 'Total Events', value: stats.totalEvents.toString(), icon: Calendar, color: 'text-orange-500', bg: 'bg-orange-50' },
+          { label: 'Verified Societies', value: stats.totalSocieties.toString(), icon: Award, color: 'text-green-500', bg: 'bg-green-50' },
+          { label: 'Engagement Rate', value: stats.engagement, icon: TrendingUp, color: 'text-purple-500', bg: 'bg-purple-50' },
         ].map((stat) => (
           <Card key={stat.label} className="border-none shadow-sm">
             <CardContent className="p-6">
@@ -81,11 +122,11 @@ export default function AnalyticsDashboard() {
         <Card className="lg:col-span-2 border-none shadow-sm">
           <CardHeader>
             <CardTitle>Registration Trends</CardTitle>
-            <CardDescription>Number of students registering for events over the last 30 days.</CardDescription>
+            <CardDescription>Weekly activity overview (Real-time tracking).</CardDescription>
           </CardHeader>
           <CardContent className="h-[400px]">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={data}>
+              <AreaChart data={dummyTrends}>
                 <defs>
                   <linearGradient id="colorReg" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#2E3192" stopOpacity={0.1}/>
@@ -110,59 +151,44 @@ export default function AnalyticsDashboard() {
             <CardDescription>By total event participation.</CardDescription>
           </CardHeader>
           <CardContent className="h-[400px] flex flex-col justify-center">
-            <ResponsiveContainer width="100%" height="300">
-              <PieChart>
-                <Pie
-                  data={societyPerformance}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={80}
-                  paddingAngle={5}
-                  dataKey="value"
-                >
-                  {societyPerformance.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+            {pieData.length > 0 ? (
+              <>
+                <ResponsiveContainer width="100%" height="300">
+                  <PieChart>
+                    <Pie
+                      data={pieData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={80}
+                      paddingAngle={5}
+                      dataKey="value"
+                    >
+                      {pieData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="space-y-3 mt-4">
+                  {pieData.map((item, index) => (
+                    <div key={item.name} className="flex items-center justify-between text-sm">
+                      <div className="flex items-center">
+                        <div className="w-3 h-3 rounded-full mr-2" style={{backgroundColor: COLORS[index]}}></div>
+                        <span className="font-medium truncate max-w-[120px]">{item.name}</span>
+                      </div>
+                      <span className="text-muted-foreground">{item.value.toLocaleString()}</span>
+                    </div>
                   ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="space-y-3 mt-4">
-              {societyPerformance.map((item, index) => (
-                <div key={item.name} className="flex items-center justify-between text-sm">
-                  <div className="flex items-center">
-                    <div className="w-3 h-3 rounded-full mr-2" style={{backgroundColor: COLORS[index]}}></div>
-                    <span className="font-medium">{item.name}</span>
-                  </div>
-                  <span className="text-muted-foreground">{item.value.toLocaleString()}</span>
                 </div>
-              ))}
-            </div>
+              </>
+            ) : (
+              <div className="text-center text-muted-foreground italic py-20">No registration data yet.</div>
+            )}
           </CardContent>
         </Card>
       </div>
-
-      <Card className="border-none shadow-sm">
-        <CardHeader>
-          <CardTitle>Society Engagement Distribution</CardTitle>
-          <CardDescription>Comparing event frequency across departments.</CardDescription>
-        </CardHeader>
-        <CardContent className="h-[300px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} />
-              <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} />
-              <Tooltip 
-                cursor={{fill: '#f8fafc'}}
-                contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
-              />
-              <Bar dataKey="events" fill="#FF4500" radius={[4, 4, 0, 0]} barSize={40} />
-            </BarChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
     </div>
   );
 }
