@@ -20,40 +20,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
+  const loadProfile = async (userId: string) => {
+    const { data: profile, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', userId)
+      .single();
+    
+    if (error) {
+      console.error('Error fetching profile:', error);
+      return null;
+    }
+    return profile;
+  };
+
   useEffect(() => {
     const initializeAuth = async () => {
+      setLoading(true);
       try {
-        // 1. Check for mock admin session (Synchronous-like check)
+        // 1. Immediate check for mock session
         const mockAdmin = sessionStorage.getItem('mock_admin_user');
         if (mockAdmin) {
-          const parsed = JSON.parse(mockAdmin);
-          setUser(parsed);
+          setUser(JSON.parse(mockAdmin));
           setLoading(false);
           return;
         }
 
-        // 2. Check Supabase session
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        
-        if (sessionError) {
-          console.warn('Supabase session error:', sessionError.message);
-        }
-
+        // 2. Supabase Check
+        const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
-          const { data: profile, error: profileError } = await supabase
-            .from('users')
-            .select('*')
-            .eq('id', session.user.id)
-            .single();
-          
-          if (profileError) {
-            console.error('Error fetching profile:', profileError);
-          } else if (profile) {
-            setUser(profile);
-          }
+          const profile = await loadProfile(session.user.id);
+          if (profile) setUser(profile);
         }
       } catch (err) {
-        console.error('Auth initialization failed:', err);
+        console.error('Auth init error:', err);
       } finally {
         setLoading(false);
       }
@@ -63,16 +63,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
-        const { data: profile } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', session.user.id)
-          .single();
-        if (profile) {
-          setUser(profile);
-        }
+        const profile = await loadProfile(session.user.id);
+        if (profile) setUser(profile);
       } else {
-        // Only clear if there's no mock session
         if (!sessionStorage.getItem('mock_admin_user')) {
           setUser(null);
         }
@@ -83,26 +76,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signUp = async (email: string, pass: string, name: string) => {
-    try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password: pass,
-        options: {
-          data: { name },
-          emailRedirectTo: `${window.location.origin}/dashboard/student`
-        }
-      });
-      
-      if (error) throw error;
-      
-      if (data.user && !data.session) {
-        return { needsVerification: true };
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password: pass,
+      options: {
+        data: { name },
+        emailRedirectTo: window.location.origin
       }
-
-      return { needsVerification: false };
-    } catch (err: any) {
-      throw err;
-    }
+    });
+    
+    if (error) throw error;
+    return { needsVerification: !!(data.user && !data.session) };
   };
 
   const signIn = async (email: string, pass: string) => {
@@ -117,33 +101,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       sessionStorage.setItem('mock_admin_user', JSON.stringify(adminUser));
       setUser(adminUser);
       setLoading(false);
-      // Use window.location for a clean redirect for mock sessions
       window.location.href = '/dashboard/super-admin';
       return;
     }
 
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
-      if (error) throw error;
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
+    if (error) throw error;
 
-      if (data.user) {
-        const { data: profile, error: profileError } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', data.user.id)
-          .single();
-
-        if (profileError) throw profileError;
-
-        if (profile) {
-          setUser(profile);
-          if (profile.role === 'student') router.push('/dashboard/student');
-          else if (profile.role === 'society_admin') router.push('/dashboard/society-admin');
-          else if (profile.role === 'super_admin') router.push('/dashboard/super-admin');
-        }
+    if (data.user) {
+      const profile = await loadProfile(data.user.id);
+      if (profile) {
+        setUser(profile);
+        const path = profile.role === 'super_admin' ? 'super-admin' : 
+                     profile.role === 'society_admin' ? 'society-admin' : 'student';
+        router.push(`/dashboard/${path}`);
       }
-    } catch (err: any) {
-      throw err;
     }
   };
 

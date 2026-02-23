@@ -1,9 +1,13 @@
+
 "use client"
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table';
 import { 
   ShieldCheck, 
@@ -13,46 +17,91 @@ import {
   CheckCircle, 
   XCircle,
   Activity,
-  ArrowUpRight
+  ArrowUpRight,
+  PlusCircle,
+  Mail,
+  User,
+  Loader2
 } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import { useToast } from '@/hooks/use-toast';
 
 export default function SuperAdminDashboard() {
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    name: '',
+    ficName: '',
+    contactEmail: '',
+    description: ''
+  });
+
   const pendingApprovals = [
     { id: '1', name: 'Sourish Kumar', email: '2205123@kiit.ac.in', society: 'KIIT Music Society', requestType: 'Admin Access' },
     { id: '2', name: 'Event: Mega Tech', email: 'admin@robotics.kiit', society: 'KIIT Robotics', requestType: 'Event Verification' },
   ];
 
   const globalStats = [
-    { label: 'Total Registered Students', value: '45,230', trend: '+12%', icon: UserPlus },
-    { label: 'Active Societies', value: '54', trend: '+2', icon: ShieldCheck },
+    { label: 'Total Students', value: '45,230', trend: '+12%', icon: UserPlus },
+    { label: 'Societies', value: '54', trend: '+2', icon: ShieldCheck },
     { label: 'Ongoing Events', value: '8', trend: 'Global', icon: Activity },
-    { label: 'Revenue Generated', value: '₹1.2M', trend: '+5%', icon: BarChart2 },
+    { label: 'Engagement', value: '₹1.2M', trend: '+5%', icon: BarChart2 },
   ];
+
+  const handleCreateSociety = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const { error } = await supabase
+        .from('societies')
+        .insert([{
+          name: formData.name,
+          fic_name: formData.ficName,
+          contact_email: formData.contactEmail,
+          description: formData.description
+        }]);
+
+      if (error) throw error;
+
+      toast({
+        title: "Society Registered",
+        description: `Society admin can now sign up with ${formData.contactEmail} to manage ${formData.name}.`
+      });
+      setFormData({ name: '', ficName: '', contactEmail: '', description: '' });
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Sync Failed",
+        description: err.message
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-primary">Global Control Center</h1>
-          <p className="text-muted-foreground">Monitoring all campus activities and verifying society credentials.</p>
+          <p className="text-muted-foreground">Monitoring campus activities and verifying credentials.</p>
         </div>
         <div className="flex space-x-3">
-          <Button variant="outline" className="border-primary text-primary hover:bg-primary/5">Download Audit Logs</Button>
-          <Button className="bg-accent text-white hover:bg-accent/90">Global Emergency Alert</Button>
+          <Button variant="outline">Download Logs</Button>
+          <Button className="bg-accent text-white hover:bg-accent/90">Global Alert</Button>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {globalStats.map((stat) => (
-          <Card key={stat.label} className="border-none shadow-sm hover:shadow-md transition-shadow bg-white">
+          <Card key={stat.label} className="border-none shadow-sm bg-white">
             <CardContent className="p-6">
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">{stat.label}</p>
                   <h3 className="text-2xl font-bold mt-1">{stat.value}</h3>
                   <div className="flex items-center mt-2 text-xs text-green-600 font-medium">
-                    <ArrowUpRight className="w-3 h-3 mr-1" />
-                    {stat.trend}
+                    <ArrowUpRight className="w-3 h-3 mr-1" /> {stat.trend}
                   </div>
                 </div>
                 <div className="p-2 bg-primary/10 text-primary rounded-lg">
@@ -65,22 +114,85 @@ export default function SuperAdminDashboard() {
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+        {/* NEW SOCIETY ADD PANEL */}
+        <Card className="xl:col-span-1 shadow-md border-none border-t-4 border-accent">
+          <CardHeader>
+            <CardTitle className="text-xl flex items-center">
+              <PlusCircle className="mr-2 w-5 h-5 text-accent" />
+              Add New Society
+            </CardTitle>
+            <CardDescription>Register society and sync admin credentials.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleCreateSociety} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Society Name</Label>
+                <Input 
+                  id="name" 
+                  value={formData.name}
+                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                  required 
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="fic">Faculty-in-Charge (FIC)</Label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input 
+                    id="fic" 
+                    className="pl-10"
+                    value={formData.ficName}
+                    onChange={(e) => setFormData(prev => ({ ...prev, ficName: e.target.value }))}
+                    required 
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="email">Society Official Email</Label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input 
+                    id="email" 
+                    type="email"
+                    className="pl-10"
+                    value={formData.contactEmail}
+                    onChange={(e) => setFormData(prev => ({ ...prev, contactEmail: e.target.value }))}
+                    required 
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="desc">Short Description</Label>
+                <Textarea 
+                  id="desc"
+                  value={formData.description}
+                  onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                />
+              </div>
+              <Button className="w-full bg-primary" disabled={loading}>
+                {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <ShieldCheck className="w-4 h-4 mr-2" />}
+                Sync Society to DB
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+
         <Card className="xl:col-span-2 shadow-md border-none overflow-hidden">
           <CardHeader className="bg-slate-50/50">
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle className="text-xl">Pending Verifications</CardTitle>
-                <CardDescription>Actions required for new societies and events.</CardDescription>
+                <CardDescription>New society and event requests.</CardDescription>
               </div>
-              <Badge variant="destructive" className="px-3">{pendingApprovals.length} Pending</Badge>
+              <Badge variant="destructive">{pendingApprovals.length} Pending</Badge>
             </div>
           </CardHeader>
           <CardContent className="p-0">
             <Table>
               <TableHeader className="bg-slate-50/30">
-                <TableRow className="hover:bg-transparent">
-                  <TableHead className="w-[250px]">Entity</TableHead>
-                  <TableHead>Society/Department</TableHead>
+                <TableRow>
+                  <TableHead>Entity</TableHead>
+                  <TableHead>Society</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -96,14 +208,14 @@ export default function SuperAdminDashboard() {
                     </TableCell>
                     <TableCell>{req.society}</TableCell>
                     <TableCell>
-                      <Badge variant="outline" className="font-normal">{req.requestType}</Badge>
+                      <Badge variant="outline">{req.requestType}</Badge>
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end space-x-2">
-                        <Button variant="ghost" size="icon" className="text-green-600 hover:bg-green-50">
+                        <Button variant="ghost" size="icon" className="text-green-600">
                           <CheckCircle className="w-5 h-5" />
                         </Button>
-                        <Button variant="ghost" size="icon" className="text-red-600 hover:bg-red-50">
+                        <Button variant="ghost" size="icon" className="text-red-600">
                           <XCircle className="w-5 h-5" />
                         </Button>
                       </div>
@@ -112,12 +224,11 @@ export default function SuperAdminDashboard() {
                 ))}
               </TableBody>
             </Table>
-            <div className="p-4 bg-slate-50/30 text-center">
-              <Button variant="link" className="text-sm text-primary">View All Verification Requests</Button>
-            </div>
           </CardContent>
         </Card>
+      </div>
 
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card className="shadow-md border-none">
           <CardHeader>
             <CardTitle className="text-xl">System Health</CardTitle>
@@ -132,17 +243,6 @@ export default function SuperAdminDashboard() {
                 <div className="h-full w-[25%] bg-green-500 rounded-full" />
               </div>
             </div>
-            
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm font-medium">
-                <span>Email Queue</span>
-                <span>45/m</span>
-              </div>
-              <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-                <div className="h-full w-[65%] bg-primary rounded-full" />
-              </div>
-            </div>
-
             <div className="p-4 bg-accent/10 rounded-2xl border border-accent/20">
               <div className="flex items-center space-x-3 text-accent">
                 <AlertCircle className="w-5 h-5" />
