@@ -12,22 +12,31 @@ import { Calendar, Shield, Users, ArrowRight } from 'lucide-react';
 function LandingContent() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
-  const { signIn } = useAuth();
+  const { signIn, signUp } = useAuth();
   const { toast } = useToast();
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      await signIn(email, password);
-      toast({ title: "Success", description: "Logged in successfully" });
+      if (isLogin) {
+        await signIn(email, password);
+        toast({ title: "Welcome back!", description: "Logged in successfully." });
+      } else {
+        if (!name) {
+          throw new Error("Please enter your name for registration.");
+        }
+        await signUp(email, password, name);
+        toast({ title: "Account created!", description: "Please check your email for confirmation." });
+      }
     } catch (error: any) {
       toast({ 
         variant: "destructive", 
-        title: "Error", 
-        description: error.message || "Invalid credentials" 
+        title: "Authentication Failed", 
+        description: error.message || "Please check your credentials and try again." 
       });
     } finally {
       setLoading(false);
@@ -83,8 +92,20 @@ function LandingContent() {
             </CardHeader>
             <CardContent>
               <form onSubmit={handleAuth} className="space-y-4">
+                {!isLogin && (
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Full Name</Label>
+                    <Input 
+                      id="name" 
+                      placeholder="e.g. Sourish Kumar" 
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      required
+                    />
+                  </div>
+                )}
                 <div className="space-y-2">
-                  <Label htmlFor="email">KIIT Email</                  Label>
+                  <Label htmlFor="email">KIIT Email</Label>
                   <Input 
                     id="email" 
                     type="email" 

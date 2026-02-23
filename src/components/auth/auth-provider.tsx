@@ -8,6 +8,7 @@ interface AuthContextType {
   user: AppUser | null;
   loading: boolean;
   signIn: (email: string, pass: string) => Promise<void>;
+  signUp: (email: string, pass: string, name: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -24,7 +25,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { data: { session } } = await supabase.auth.getSession();
       
       if (session?.user) {
-        // Fetch profile
         const { data: profile } = await supabase
           .from('users')
           .select('*')
@@ -35,7 +35,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(profile);
         }
       } else {
-        // Special case for Super Admin Hardcoded Logic
         const storedUser = localStorage.getItem('kiit_event_session');
         if (storedUser) {
           setUser(JSON.parse(storedUser));
@@ -47,8 +46,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     fetchSession();
   }, []);
 
+  const signUp = async (email: string, pass: string, name: string) => {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password: pass,
+      options: {
+        data: { name }
+      }
+    });
+    
+    if (error) throw error;
+    if (data.user) {
+      router.push('/dashboard/student');
+    }
+  };
+
   const signIn = async (email: string, pass: string) => {
-    // Super Admin Bypass
     if (email === 'admin@kiit' && pass === 'admin@kiit') {
       const adminUser: AppUser = {
         id: 'super-admin-uuid',
@@ -86,7 +99,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut }}>
       {children}
     </AuthContext.Provider>
   );
