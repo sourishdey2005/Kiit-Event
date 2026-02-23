@@ -9,6 +9,7 @@ import { Search, Filter, Calendar as CalendarIcon, Sparkles, Loader2 } from 'luc
 import { supabase, CampusEvent } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/components/auth/auth-provider';
+import Link from 'next/link';
 
 export default function EventsDiscovery() {
   const { user } = useAuth();
