@@ -1,8 +1,8 @@
 "use client"
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { supabase, AppUser, UserRole } from '@/lib/supabase';
-import { useRouter, usePathname } from 'next/navigation';
+import { supabase, AppUser } from '@/lib/supabase';
+import { useRouter } from 'next/navigation';
 
 interface AuthContextType {
   user: AppUser | null;
@@ -18,50 +18,88 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
-  const pathname = usePathname();
 
   useEffect(() => {
     const fetchSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      
+      try {
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError) throw sessionError;
+
+        if (session?.user) {
+          const { data: profile, error: profileError } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
+          
+          if (profileError) {
+            console.error('Error fetching profile:', profileError);
+          } else if (profile) {
+            setUser(profile);
+          }
+        } else {
+          const storedUser = localStorage.getItem('kiit_event_session');
+          if (storedUser) {
+            setUser(JSON.parse(storedUser));
+          }
+        }
+      } catch (err) {
+        console.error('Session fetch failed:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchSession();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
         const { data: profile } = await supabase
           .from('users')
           .select('*')
           .eq('id', session.user.id)
           .single();
-        
-        if (profile) {
-          setUser(profile);
-        }
+        if (profile) setUser(profile);
       } else {
-        const storedUser = localStorage.getItem('kiit_event_session');
-        if (storedUser) {
-          setUser(JSON.parse(storedUser));
-        }
+        setUser(null);
+        localStorage.removeItem('kiit_event_session');
       }
-      setLoading(false);
-    };
+    });
 
-    fetchSession();
+    return () => subscription.unsubscribe();
   }, []);
 
   const signUp = async (email: string, pass: string, name: string) => {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password: pass,
-      options: {
-        data: { name }
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password: pass,
+        options: {
+          data: { name }
+        }
+      });
+      
+      if (error) throw error;
+      
+      if (data.user && !data.session) {
+        // Email confirmation is likely enabled
+        throw new Error("Registration successful! Please check your email to verify your account before logging in.");
       }
-    });
-    
-    if (error) throw error;
-    if (data.user) {
-      router.push('/dashboard/student');
+
+      if (data.user && data.session) {
+        router.push('/dashboard/student');
+      }
+    } catch (err: any) {
+      if (err.message === 'Failed to fetch') {
+        throw new Error("Network error: Could not reach Supabase. Please check your internet connection or project status.");
+      }
+      throw err;
     }
   };
 
   const signIn = async (email: string, pass: string) => {
+    // Admin bypass for local testing
     if (email === 'admin@kiit' && pass === 'admin@kiit') {
       const adminUser: AppUser = {
         id: 'super-admin-uuid',
@@ -75,19 +113,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
-    if (error) throw error;
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
+      if (error) throw error;
 
-    const { data: profile } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', data.user.id)
-      .single();
+      if (data.user) {
+        const { data: profile, error: profileError } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', data.user.id)
+          .single();
 
-    if (profile) {
-      setUser(profile);
-      if (profile.role === 'student') router.push('/dashboard/student');
-      else if (profile.role === 'society_admin') router.push('/dashboard/society-admin');
+        if (profileError) throw profileError;
+
+        if (profile) {
+          setUser(profile);
+          if (profile.role === 'student') router.push('/dashboard/student');
+          else if (profile.role === 'society_admin') router.push('/dashboard/society-admin');
+          else if (profile.role === 'super_admin') router.push('/dashboard/super-admin');
+        }
+      }
+    } catch (err: any) {
+      if (err.message === 'Failed to fetch') {
+        throw new Error("Network error: Could not reach Supabase. Please check your internet connection or project status.");
+      }
+      throw err;
     }
   };
 
