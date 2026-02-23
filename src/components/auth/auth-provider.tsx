@@ -57,12 +57,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .single();
         if (profile) {
           setUser(profile);
-          // Redirect to appropriate dashboard if on the landing page
-          if (window.location.pathname === '/') {
-            if (profile.role === 'student') router.push('/dashboard/student');
-            else if (profile.role === 'society_admin') router.push('/dashboard/society-admin');
-            else if (profile.role === 'super_admin') router.push('/dashboard/super-admin');
-          }
         }
       } else {
         setUser(null);
@@ -85,40 +79,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       if (error) throw error;
       
+      // If we have user but no session, it means email confirmation is required
       if (data.user && !data.session) {
-        // Email confirmation is enabled in Supabase settings
         return { needsVerification: true };
       }
 
-      if (data.user && data.session) {
-        // Auto-login (email confirmation disabled)
-        const { data: profile } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', data.user.id)
-          .single();
-        
-        if (profile) {
-          setUser(profile);
-          router.push('/dashboard/student');
-        }
-        return { needsVerification: false };
-      }
-      
       return { needsVerification: false };
     } catch (err: any) {
       if (err.message === 'Failed to fetch') {
-        throw new Error("Network error: Could not reach Supabase. Please check your internet connection.");
+        throw new Error("Network error: Could not connect to Supabase. Check your internet.");
       }
       throw err;
     }
   };
 
   const signIn = async (email: string, pass: string) => {
-    // Admin bypass for local testing
+    // SUPER ADMIN BYPASS
     if (email === 'admin@kiit' && pass === 'admin@kiit') {
       const adminUser: AppUser = {
-        id: 'super-admin-uuid',
+        id: 'super-admin-fixed-id',
         name: 'Super Admin',
         email: 'admin@kiit',
         role: 'super_admin'
@@ -150,7 +129,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (err: any) {
       if (err.message === 'Failed to fetch') {
-        throw new Error("Network error: Could not reach Supabase.");
+        throw new Error("Network error: Could not reach Supabase API.");
       }
       throw err;
     }
