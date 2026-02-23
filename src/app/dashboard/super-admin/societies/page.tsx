@@ -38,7 +38,8 @@ export default function SocietyManagement() {
       
       if (supabaseError) {
         if (supabaseError.code === '42501') {
-          throw new Error('Permission denied. Please run the "Bypass-Friendly" SQL script in Supabase.');
+          setError('Permission denied. Please run the "Bypass-Friendly" SQL script in your Supabase SQL Editor.');
+          return;
         }
         throw new Error(supabaseError.message);
       }
@@ -208,7 +209,7 @@ export default function SocietyManagement() {
                     </TableCell>
                   </TableRow>
                 ))}
-                {!fetching && societies.length === 0 && (
+                {!fetching && societies.length === 0 && !error && (
                   <TableRow><TableCell colSpan={4} className="text-center py-10 text-muted-foreground italic">No societies found.</TableCell></TableRow>
                 )}
               </TableBody>
