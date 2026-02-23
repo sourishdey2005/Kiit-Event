@@ -1,4 +1,3 @@
-
 "use client"
 
 import React, { useState, useEffect } from 'react';
@@ -35,7 +34,7 @@ export default function SuperAdminDashboard() {
     students: 0,
     societies: 0,
     ongoingEvents: 0,
-    engagement: 0
+    totalRegistrations: 0
   });
   const [pendingEvents, setPendingEvents] = useState<any[]>([]);
   const [formData, setFormData] = useState({
@@ -48,46 +47,50 @@ export default function SuperAdminDashboard() {
   const fetchData = async () => {
     setFetching(true);
     try {
-      // Fetch stats with error resilience
-      const { count: studentCount, error: sErr } = await supabase
+      // 1. Fetch Students Count
+      const { count: studentCount } = await supabase
         .from('users')
         .select('*', { count: 'exact', head: true })
         .eq('role', 'student');
 
-      const { count: societyCount, error: socErr } = await supabase
+      // 2. Fetch Societies Count
+      const { count: societyCount } = await supabase
         .from('societies')
         .select('*', { count: 'exact', head: true });
 
-      const { count: eventCount, error: eErr } = await supabase
+      // 3. Fetch Active Events Count
+      const { count: eventCount } = await supabase
         .from('events')
         .select('*', { count: 'exact', head: true })
-        .gt('event_date', new Date().toISOString());
+        .eq('verified', true);
+
+      // 4. Fetch Total Registrations
+      const { count: regCount } = await supabase
+        .from('registrations')
+        .select('*', { count: 'exact', head: true });
 
       setStats({
         students: studentCount || 0,
         societies: societyCount || 0,
         ongoingEvents: eventCount || 0,
-        engagement: (studentCount || 0) * 12
+        totalRegistrations: regCount || 0
       });
 
-      // Fetch Pending Event Verifications
-      const { data: events, error: eventError } = await supabase
+      // 5. Fetch Pending Event Verifications
+      const { data: events } = await supabase
         .from('events')
         .select('*, societies(name)')
         .eq('verified', false)
         .order('created_at', { ascending: false });
 
-      if (eventError && eventError.code !== 'PGRST116') {
-        console.warn('Events fetch warning:', eventError);
-      }
       setPendingEvents(events || []);
 
     } catch (error: any) {
       console.error('Error fetching dashboard data:', error);
       toast({
         variant: "destructive",
-        title: "Sync Error",
-        description: "Check your Supabase tables and SQL schema."
+        title: "Database Error",
+        description: "Could not sync dashboard data. Check Supabase connection."
       });
     } finally {
       setFetching(false);
@@ -115,14 +118,14 @@ export default function SuperAdminDashboard() {
 
       toast({
         title: "Society Registered",
-        description: `Synced successfully. Stats updated.`
+        description: `Successfully added ${formData.name}. Society admin can now register.`
       });
       setFormData({ name: '', ficName: '', contactEmail: '', description: '' });
       fetchData();
     } catch (err: any) {
       toast({
         variant: "destructive",
-        title: "Sync Failed",
+        title: "Registration Failed",
         description: err.message
       });
     } finally {
@@ -141,23 +144,19 @@ export default function SuperAdminDashboard() {
       
       toast({
         title: status ? "Event Verified" : "Event Rejected",
-        description: "Status synced to database."
+        description: "Live status has been updated for all students."
       });
       fetchData();
     } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Action Failed",
-        description: error.message
-      });
+      toast({ variant: "destructive", title: "Action Failed", description: error.message });
     }
   };
 
   const globalStats = [
-    { label: 'Total Students', value: stats.students.toLocaleString(), trend: 'Live', icon: UserPlus, color: 'text-blue-500' },
-    { label: 'Societies', value: stats.societies.toString(), trend: 'Live', icon: ShieldCheck, color: 'text-green-500' },
-    { label: 'Ongoing Events', value: stats.ongoingEvents.toString(), trend: 'Global', icon: Activity, color: 'text-orange-500' },
-    { label: 'System Reach', value: stats.engagement.toLocaleString(), trend: 'Points', icon: BarChart2, color: 'text-purple-500' },
+    { label: 'Total Students', value: stats.students.toLocaleString(), trend: 'Active', icon: UserPlus, color: 'text-blue-500' },
+    { label: 'Registered Societies', value: stats.societies.toString(), trend: 'Global', icon: ShieldCheck, color: 'text-green-500' },
+    { label: 'Verified Events', value: stats.ongoingEvents.toString(), trend: 'Live', icon: Activity, color: 'text-orange-500' },
+    { label: 'Total Engagement', value: stats.totalRegistrations.toLocaleString(), trend: 'Signups', icon: BarChart2, color: 'text-purple-500' },
   ];
 
   return (
@@ -165,14 +164,13 @@ export default function SuperAdminDashboard() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-primary">Global Control Center</h1>
-          <p className="text-muted-foreground">Monitoring campus activities and verifying credentials.</p>
+          <p className="text-muted-foreground">Real-time monitoring of KIIT campus activities.</p>
         </div>
         <div className="flex space-x-3">
           <Button variant="outline" onClick={fetchData} disabled={fetching}>
             <RefreshCw className={`w-4 h-4 mr-2 ${fetching ? 'animate-spin' : ''}`} />
-            Refresh
+            Sync Data
           </Button>
-          <Button className="bg-accent text-white hover:bg-accent/90">Global Alert</Button>
         </div>
       </div>
 
@@ -204,7 +202,7 @@ export default function SuperAdminDashboard() {
               <PlusCircle className="mr-2 w-5 h-5 text-accent" />
               Add Society
             </CardTitle>
-            <CardDescription>Register society and FIC details.</CardDescription>
+            <CardDescription>Register society and FIC contact details.</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleCreateSociety} className="space-y-4">
@@ -233,7 +231,7 @@ export default function SuperAdminDashboard() {
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="email">Society Official Email</Label>
+                <Label htmlFor="email">Official Email</Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input 
@@ -246,30 +244,31 @@ export default function SuperAdminDashboard() {
                     required 
                   />
                 </div>
+                <p className="text-[10px] text-muted-foreground">Admin role is auto-assigned on signup with this email.</p>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="desc">Short Description</Label>
+                <Label htmlFor="desc">Goals & Description</Label>
                 <Textarea 
                   id="desc"
-                  placeholder="Goals and mission..."
+                  placeholder="Society mission..."
                   value={formData.description}
                   onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
                 />
               </div>
               <Button className="w-full bg-primary" disabled={loading}>
                 {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <ShieldCheck className="w-4 h-4 mr-2" />}
-                Register Society
+                Register to Database
               </Button>
             </form>
           </CardContent>
         </Card>
 
         <Card className="xl:col-span-2 shadow-md border-none overflow-hidden">
-          <CardHeader className="bg-slate-50/50">
+          <CardHeader className="bg-slate-50/50 border-b border-slate-100">
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle className="text-xl">Pending Verifications</CardTitle>
-                <CardDescription>Event verification requests.</CardDescription>
+                <CardDescription>Event requests awaiting live approval.</CardDescription>
               </div>
               <Badge variant={pendingEvents.length > 0 ? "destructive" : "secondary"}>
                 {pendingEvents.length} Pending
@@ -280,8 +279,8 @@ export default function SuperAdminDashboard() {
             <Table>
               <TableHeader className="bg-slate-50/30">
                 <TableRow>
-                  <TableHead>Event</TableHead>
-                  <TableHead>Society</TableHead>
+                  <TableHead>Event Details</TableHead>
+                  <TableHead>Organizing Society</TableHead>
                   <TableHead>Date</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -311,7 +310,7 @@ export default function SuperAdminDashboard() {
                           <Button 
                             variant="ghost" 
                             size="icon" 
-                            className="text-green-600"
+                            className="text-green-600 hover:bg-green-50"
                             onClick={() => handleVerifyEvent(req.id, true)}
                           >
                             <CheckCircle className="w-5 h-5" />
@@ -319,7 +318,7 @@ export default function SuperAdminDashboard() {
                           <Button 
                             variant="ghost" 
                             size="icon" 
-                            className="text-red-600"
+                            className="text-red-600 hover:bg-red-50"
                             onClick={() => handleVerifyEvent(req.id, false)}
                           >
                             <XCircle className="w-5 h-5" />
@@ -331,31 +330,12 @@ export default function SuperAdminDashboard() {
                 ) : (
                   <TableRow>
                     <TableCell colSpan={4} className="text-center py-20 text-muted-foreground italic">
-                      No pending verifications.
+                      All event requests have been processed.
                     </TableCell>
                   </TableRow>
                 )}
               </TableBody>
             </Table>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card className="shadow-md border-none">
-          <CardHeader>
-            <CardTitle className="text-xl">System Status</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm font-medium">
-                <span>Database Sync (Supabase)</span>
-                <span className="text-green-600">Online</span>
-              </div>
-              <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-                <div className="h-full w-full bg-green-500 rounded-full" />
-              </div>
-            </div>
           </CardContent>
         </Card>
       </div>

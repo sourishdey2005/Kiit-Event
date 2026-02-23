@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Cleaned up credentials to prevent "Failed to fetch" errors caused by hidden characters
+// Credentials for the KIIT EventSphere project
 const supabaseUrl = 'https://xizdgcgzmnnwlcpxgham.supabase.co'.trim();
 const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhpemRnY2d6bW5ud2xjcHhnaGFtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE3NzA2NDMsImV4cCI6MjA4NzM0NjY0M30.87VS-VoWZNk4O0JOP-zOeHdec2tmq60_h_J0cs-X_l8'.trim();
 
@@ -27,6 +27,8 @@ export interface Society {
   id: string;
   name: string;
   description: string;
+  fic_name?: string;
+  contact_email?: string;
   created_by: string;
   created_at: string;
 }
@@ -43,4 +45,15 @@ export interface CampusEvent {
   created_by: string;
   verified: boolean;
   created_at: string;
+  societies?: {
+    name: string;
+  };
+}
+
+export interface Registration {
+  id: string;
+  user_id: string;
+  event_id: string;
+  created_at: string;
+  events?: CampusEvent;
 }
