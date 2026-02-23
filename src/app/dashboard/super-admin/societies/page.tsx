@@ -1,3 +1,4 @@
+
 "use client"
 
 import React, { useState, useEffect } from 'react';
@@ -8,8 +9,8 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { PlusCircle, Users, Mail, User, Loader2, Search } from 'lucide-react';
-import { supabase, Society } from '@/lib/supabase';
+import { PlusCircle, Users, Mail, User, Loader2, Search, Trash2 } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 
 export default function SocietyManagement() {
@@ -63,7 +64,7 @@ export default function SocietyManagement() {
 
       toast({
         title: "Society Added!",
-        description: `${formData.name} has been successfully registered.`
+        description: `${formData.name} has been successfully registered. The Society Admin can now register with the email ${formData.contactEmail}.`
       });
       
       setFormData({ name: '', description: '', ficName: '', contactEmail: '' });
@@ -79,12 +80,25 @@ export default function SocietyManagement() {
     }
   };
 
+  const deleteSociety = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this society?')) return;
+    
+    try {
+      const { error } = await supabase.from('societies').delete().eq('id', id);
+      if (error) throw error;
+      toast({ title: "Deleted", description: "Society record removed successfully." });
+      fetchSocieties();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Error", description: err.message });
+    }
+  };
+
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-primary">Society Management</h1>
-          <p className="text-muted-foreground">Add and manage campus societies and their FICs.</p>
+          <p className="text-muted-foreground">Add campus societies and assign their Faculty-in-Charge (FIC).</p>
         </div>
       </div>
 
@@ -93,9 +107,9 @@ export default function SocietyManagement() {
           <CardHeader>
             <CardTitle className="flex items-center">
               <PlusCircle className="mr-2 w-5 h-5 text-accent" />
-              Add New Society
+              Register New Society
             </CardTitle>
-            <CardDescription>Enter details to create a new society record.</CardDescription>
+            <CardDescription>Enter the official details for the new society.</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -115,7 +129,7 @@ export default function SocietyManagement() {
                   <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input 
                     id="ficName" 
-                    placeholder="Prof. Name" 
+                    placeholder="Prof. Sourish Kumar" 
                     className="pl-10"
                     value={formData.ficName}
                     onChange={(e) => setFormData(prev => ({ ...prev, ficName: e.target.value }))}
@@ -124,25 +138,26 @@ export default function SocietyManagement() {
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="contactEmail">Society Contact Email</Label>
+                <Label htmlFor="contactEmail">Official Contact Email</Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input 
                     id="contactEmail" 
                     type="email"
-                    placeholder="society@kiit.ac.in" 
+                    placeholder="robotics@kiit.ac.in" 
                     className="pl-10"
                     value={formData.contactEmail}
                     onChange={(e) => setFormData(prev => ({ ...prev, contactEmail: e.target.value }))}
                     required
                   />
                 </div>
+                <p className="text-[10px] text-muted-foreground italic">Society admins will use this email to log in.</p>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="description">Short Description</Label>
+                <Label htmlFor="description">Society Description</Label>
                 <Textarea 
                   id="description" 
-                  placeholder="What is this society about?" 
+                  placeholder="A brief about the society's goals..." 
                   className="min-h-[100px]"
                   value={formData.description}
                   onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
@@ -150,7 +165,7 @@ export default function SocietyManagement() {
               </div>
               <Button className="w-full bg-primary" disabled={loading}>
                 {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <PlusCircle className="w-4 h-4 mr-2" />}
-                Create Society Record
+                Register Society
               </Button>
             </form>
           </CardContent>
@@ -158,17 +173,17 @@ export default function SocietyManagement() {
 
         <Card className="lg:col-span-2 border-none shadow-md overflow-hidden">
           <CardHeader className="bg-slate-50/50">
-            <CardTitle>Existing Societies</CardTitle>
-            <CardDescription>Directory of all registered campus societies.</CardDescription>
+            <CardTitle>Society Directory</CardTitle>
+            <CardDescription>All registered societies on EventSphere.</CardDescription>
           </CardHeader>
           <CardContent className="p-0">
             <Table>
               <TableHeader className="bg-slate-50/30">
                 <TableRow>
-                  <TableHead>Society Name</TableHead>
+                  <TableHead>Society Details</TableHead>
                   <TableHead>FIC</TableHead>
-                  <TableHead>Contact</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>Contact Email</TableHead>
+                  <TableHead className="text-right">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -180,18 +195,25 @@ export default function SocietyManagement() {
                   </TableRow>
                 ) : societies.map((soc) => (
                   <TableRow key={soc.id} className="hover:bg-slate-50">
-                    <TableCell className="font-semibold">{soc.name}</TableCell>
-                    <TableCell>{soc.fic_name || 'N/A'}</TableCell>
-                    <TableCell className="text-muted-foreground text-xs">{soc.contact_email}</TableCell>
                     <TableCell>
-                      <Badge variant="secondary" className="bg-green-100 text-green-700">Active</Badge>
+                      <div className="flex flex-col">
+                        <span className="font-semibold">{soc.name}</span>
+                        <span className="text-[10px] text-muted-foreground line-clamp-1">{soc.description}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-sm">{soc.fic_name || 'Not Set'}</TableCell>
+                    <TableCell className="text-sm font-medium text-primary underline">{soc.contact_email}</TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="ghost" size="icon" className="text-red-500 hover:bg-red-50" onClick={() => deleteSociety(soc.id)}>
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}
                 {!fetching && societies.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={4} className="text-center py-10 text-muted-foreground">
-                      No societies registered yet.
+                      No societies registered. Add your first society!
                     </TableCell>
                   </TableRow>
                 )}

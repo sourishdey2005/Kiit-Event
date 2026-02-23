@@ -1,3 +1,4 @@
+
 "use client"
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
@@ -20,19 +21,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
-    const fetchSession = async () => {
+    const initializeAuth = async () => {
       try {
-        // Check for mock admin session first
+        // 1. Check for mock admin session (Synchronous-like check)
         const mockAdmin = sessionStorage.getItem('mock_admin_user');
         if (mockAdmin) {
-          setUser(JSON.parse(mockAdmin));
+          const parsed = JSON.parse(mockAdmin);
+          setUser(parsed);
           setLoading(false);
           return;
         }
 
+        // 2. Check Supabase session
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         
-        if (sessionError) throw sessionError;
+        if (sessionError) {
+          console.warn('Supabase session error:', sessionError.message);
+        }
 
         if (session?.user) {
           const { data: profile, error: profileError } = await supabase
@@ -48,13 +53,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         }
       } catch (err) {
-        console.error('Session fetch failed:', err);
+        console.error('Auth initialization failed:', err);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchSession();
+    initializeAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
@@ -66,8 +71,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (profile) {
           setUser(profile);
         }
-      } else if (!sessionStorage.getItem('mock_admin_user')) {
-        setUser(null);
+      } else {
+        // Only clear if there's no mock session
+        if (!sessionStorage.getItem('mock_admin_user')) {
+          setUser(null);
+        }
       }
     });
 
@@ -108,7 +116,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       };
       sessionStorage.setItem('mock_admin_user', JSON.stringify(adminUser));
       setUser(adminUser);
-      router.push('/dashboard/super-admin');
+      setLoading(false);
+      // Use window.location for a clean redirect for mock sessions
+      window.location.href = '/dashboard/super-admin';
       return;
     }
 
@@ -141,7 +151,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     sessionStorage.removeItem('mock_admin_user');
     await supabase.auth.signOut();
     setUser(null);
-    router.push('/');
+    window.location.href = '/';
   };
 
   return (
