@@ -9,14 +9,16 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { PlusCircle, Users, Mail, User, Loader2, Search, Trash2 } from 'lucide-react';
+import { PlusCircle, Users, Mail, User, Loader2, Search, Trash2, AlertCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export default function SocietyManagement() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [societies, setSocieties] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     name: '',
@@ -26,16 +28,22 @@ export default function SocietyManagement() {
   });
 
   const fetchSocieties = async () => {
+    setFetching(true);
+    setError(null);
     try {
-      const { data, error } = await supabase
+      const { data, error: supabaseError } = await supabase
         .from('societies')
         .select('*')
         .order('created_at', { ascending: false });
       
-      if (error) throw error;
+      if (supabaseError) {
+        console.error('Supabase Error:', supabaseError);
+        throw new Error(supabaseError.message || 'Failed to fetch societies');
+      }
       setSocieties(data || []);
     } catch (err: any) {
-      console.error(err);
+      console.error('Fetch Societies Error:', err);
+      setError(err.message || 'An unexpected error occurred while fetching societies.');
     } finally {
       setFetching(false);
     }
@@ -50,7 +58,7 @@ export default function SocietyManagement() {
     setLoading(true);
     
     try {
-      const { data, error } = await supabase
+      const { data, error: supabaseError } = await supabase
         .from('societies')
         .insert([{
           name: formData.name,
@@ -60,7 +68,7 @@ export default function SocietyManagement() {
         }])
         .select();
 
-      if (error) throw error;
+      if (supabaseError) throw new Error(supabaseError.message);
 
       toast({
         title: "Society Added!",
@@ -81,11 +89,11 @@ export default function SocietyManagement() {
   };
 
   const deleteSociety = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this society?')) return;
+    if (!confirm('Are you sure you want to delete this society? This will NOT delete any associated events but might cause orphans.')) return;
     
     try {
-      const { error } = await supabase.from('societies').delete().eq('id', id);
-      if (error) throw error;
+      const { error: supabaseError } = await supabase.from('societies').delete().eq('id', id);
+      if (supabaseError) throw new Error(supabaseError.message);
       toast({ title: "Deleted", description: "Society record removed successfully." });
       fetchSocieties();
     } catch (err: any) {
@@ -101,6 +109,16 @@ export default function SocietyManagement() {
           <p className="text-muted-foreground">Add campus societies and assign their Faculty-in-Charge (FIC).</p>
         </div>
       </div>
+
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Database Sync Issue</AlertTitle>
+          <AlertDescription>
+            {error}. Ensure you have executed the Master SQL script in your Supabase dashboard.
+          </AlertDescription>
+        </Alert>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <Card className="lg:col-span-1 border-none shadow-md h-fit">
@@ -129,7 +147,7 @@ export default function SocietyManagement() {
                   <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input 
                     id="ficName" 
-                    placeholder="Prof. Sourish Kumar" 
+                    placeholder="Prof. Name" 
                     className="pl-10"
                     value={formData.ficName}
                     onChange={(e) => setFormData(prev => ({ ...prev, ficName: e.target.value }))}
@@ -144,7 +162,7 @@ export default function SocietyManagement() {
                   <Input 
                     id="contactEmail" 
                     type="email"
-                    placeholder="robotics@kiit.ac.in" 
+                    placeholder="society@kiit.ac.in" 
                     className="pl-10"
                     value={formData.contactEmail}
                     onChange={(e) => setFormData(prev => ({ ...prev, contactEmail: e.target.value }))}
@@ -174,7 +192,7 @@ export default function SocietyManagement() {
         <Card className="lg:col-span-2 border-none shadow-md overflow-hidden">
           <CardHeader className="bg-slate-50/50">
             <CardTitle>Society Directory</CardTitle>
-            <CardDescription>All registered societies on EventSphere.</CardDescription>
+            <CardDescription>All registered societies on KIIT EventSphere.</CardDescription>
           </CardHeader>
           <CardContent className="p-0">
             <Table>
@@ -210,7 +228,7 @@ export default function SocietyManagement() {
                     </TableCell>
                   </TableRow>
                 ))}
-                {!fetching && societies.length === 0 && (
+                {!fetching && societies.length === 0 && !error && (
                   <TableRow>
                     <TableCell colSpan={4} className="text-center py-10 text-muted-foreground">
                       No societies registered. Add your first society!
