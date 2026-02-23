@@ -16,8 +16,7 @@ import {
   CheckCircle,
   PlusCircle,
   Search,
-  Ticket,
-  ShieldAlert
+  Ticket
 } from 'lucide-react';
 import { useAuth } from '@/components/auth/auth-provider';
 
@@ -89,15 +88,6 @@ export function SidebarNav({ role }: SidebarNavProps) {
       </nav>
 
       <div className="p-4 mt-auto border-t space-y-2">
-        {role === 'super_admin' && (
-          <div className="px-4 py-3 bg-red-50 rounded-xl mb-4 border border-red-100">
-            <div className="flex items-center text-red-600 font-bold text-xs mb-1">
-              <ShieldAlert className="w-3 h-3 mr-1" />
-              SUPER USER
-            </div>
-            <p className="text-[10px] text-red-500 font-medium">Bypass Mode Active</p>
-          </div>
-        )}
         <button
           onClick={() => signOut()}
           className="flex items-center w-full px-4 py-3 text-sm font-bold text-red-500 hover:bg-red-50 rounded-xl transition-colors group"
