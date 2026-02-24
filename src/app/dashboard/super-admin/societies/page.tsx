@@ -38,7 +38,7 @@ export default function SocietyManagement() {
       
       if (supabaseError) {
         if (supabaseError.code === '42501') {
-          setError('Permission denied. Please run the "Bypass-Friendly" SQL script in your Supabase SQL Editor.');
+          setError('Permission denied. Please run the "Bypass-Friendly" SQL script in your Supabase SQL Editor to allow anonymous admin access.');
           return;
         }
         throw new Error(supabaseError.message);

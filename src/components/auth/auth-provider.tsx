@@ -29,8 +29,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .single();
       
       if (error) {
-        // Log error but don't crash; might be a missing row in public.users
-        console.warn('Profile record not found in public.users, using fallback.', error.message);
+        console.warn('Profile not found in database:', error.message);
         return null;
       }
       return profile;
@@ -44,12 +43,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (profile) {
       setUser(profile);
     } else {
-      // Fallback user object if the trigger failed to create a public profile
       setUser({
         id: sessionUser.id,
         name: sessionUser.user_metadata?.name || 'User',
         email: sessionUser.email || '',
-        role: 'student' // Default fallback role
+        role: 'student'
       });
     }
   };
@@ -58,7 +56,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const initializeAuth = async () => {
       setLoading(true);
       try {
-        // 1. Check for mock admin session
         const mockAdmin = sessionStorage.getItem('mock_admin_user');
         if (mockAdmin) {
           setUser(JSON.parse(mockAdmin));
@@ -66,7 +63,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return;
         }
 
-        // 2. Check Supabase session
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
           await syncUser(session.user);
@@ -94,21 +90,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signUp = async (email: string, pass: string, name: string) => {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password: pass,
-      options: {
-        data: { name },
-        emailRedirectTo: window.location.origin
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password: pass,
+        options: {
+          data: { name },
+          emailRedirectTo: window.location.origin
+        }
+      });
+      
+      if (error) throw error;
+      return { needsVerification: !!(data.user && !data.session) };
+    } catch (err: any) {
+      if (err.message === 'Failed to fetch') {
+        throw new Error("Could not connect to Supabase. Please check your internet connection.");
       }
-    });
-    
-    if (error) throw error;
-    return { needsVerification: !!(data.user && !data.session) };
+      throw err;
+    }
   };
 
   const signIn = async (email: string, pass: string) => {
-    // SUPER ADMIN BYPASS
     if (email === 'admin@kiit' && pass === 'admin@kiit') {
       const adminUser: AppUser = {
         id: 'super-admin-fixed-id',
@@ -123,13 +125,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
-    if (error) throw error;
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
+      if (error) throw error;
 
-    if (data.user) {
-      await syncUser(data.user);
-      // Wait a brief moment for state to update then redirect based on role
-      // We check sessionUser role directly from profile if possible
+      if (data.user) {
+        await syncUser(data.user);
+        // Role based redirection is handled in layout or page
+      }
+    } catch (err: any) {
+      if (err.message === 'Failed to fetch') {
+        throw new Error("Network Error: Could not reach Supabase. Check your connection or Supabase project status.");
+      }
+      throw err;
     }
   };
 
