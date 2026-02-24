@@ -131,7 +131,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (data.user) {
         await syncUser(data.user);
-        // Role based redirection is handled in layout or page
       }
     } catch (err: any) {
       if (err.message === 'Failed to fetch') {
