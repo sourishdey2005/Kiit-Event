@@ -43,6 +43,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (profile) {
       setUser(profile);
     } else {
+      // Fallback if profile trigger hasn't finished
       setUser({
         id: sessionUser.id,
         name: sessionUser.user_metadata?.name || 'User',
@@ -103,14 +104,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error) throw error;
       return { needsVerification: !!(data.user && !data.session) };
     } catch (err: any) {
-      if (err.message === 'Failed to fetch') {
-        throw new Error("Could not connect to Supabase. Please check your internet connection.");
+      console.error('Sign Up Error:', err);
+      if (err.message === 'Failed to fetch' || err.name === 'TypeError') {
+        throw new Error("Connection failed: Could not reach Supabase. Please check if the project is active and your internet is connected.");
       }
       throw err;
     }
   };
 
   const signIn = async (email: string, pass: string) => {
+    // Super Admin Bypass for prototyping
     if (email === 'admin@kiit' && pass === 'admin@kiit') {
       const adminUser: AppUser = {
         id: 'super-admin-fixed-id',
@@ -133,8 +136,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await syncUser(data.user);
       }
     } catch (err: any) {
-      if (err.message === 'Failed to fetch') {
-        throw new Error("Network Error: Could not reach Supabase. Check your connection or Supabase project status.");
+      console.error('Sign In Error:', err);
+      if (err.message === 'Failed to fetch' || err.name === 'TypeError') {
+        throw new Error("Connection failed: Could not reach Supabase. Check your project status or network connection.");
       }
       throw err;
     }
